@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Big Back Logger</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Titan+One&display=swap" rel="stylesheet">
+    
+    <!-- PWA: The manifest is now in a script tag to be self-contained -->
+    <script type="application/json" id="manifest-data">
+        {
+          "name": "Big Back Logger",
+          "short_name": "BigBack",
+          "start_url": "./",
+          "display": "standalone",
+          "background_color": "#0d0d0d",
+          "theme_color": "#a056da",
+          "icons": [
+            {
+              "src": "https://placehold.co/192x192/0d0d0d/a056da?text=BB",
+              "sizes": "192x192",
+              "type": "image/png"
+            },
+            {
+              "src": "https://placehold.co/512x512/0d0d0d/a056da?text=BB",
+              "sizes": "512x512",
+              "type": "image/png"
+            }
+          ]
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@700&display=swap');
+
+        body {
+            font-family: 'Titan One', sans-serif;
+            background-color: #0d0d0d;
+            color: #f0f0f0;
+        }
+
+        .bouncy {
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .bouncy:hover {
+            transform: translateY(-5px) scale(1.05);
+        }
+        .bouncy:active {
+            transform: translateY(2px) scale(0.95);
+        }
+
+        .container-shadow {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        @keyframes pulse-fuchsia {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 0 10px 5px rgba(192, 38, 211, 0.5);
+            }
+        }
+        .animate-pulse-fuchsia {
+            animation: pulse-fuchsia 2s infinite ease-in-out;
+        }
+        @keyframes pulse-red {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 0 10px 5px rgba(239, 68, 68, 0.5);
+            }
+        }
+        .animate-pulse-red {
+            animation: pulse-red 2s infinite ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px) rotate(-1deg); }
+            20%, 40%, 60%, 80% { transform: translateX(5px) rotate(1deg); }
+        }
+        .shake-animation {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+            transform: translate3d(0, 0, 0);
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            perspective: 1000px;
+        }
+
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+        }
+
+        .day-cell {
+            position: relative;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 9999px;
+            transition: background-color 0.2s;
+        }
+        .day-cell:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .day-cell.selected {
+            background-color: #a056da;
+            color: white;
+            font-weight: bold;
+        }
+        .day-cell.other-month {
+            opacity: 0.5;
+        }
+        .marker {
+            position: absolute;
+            bottom: 4px;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+        .marker.purple {
+            background-color: #a056da;
+        }
+        .marker.red {
+            background-color: #ef4444;
+        }
+        
+        .total-calories-container {
+            position: relative;
+        }
+
+        .emoji-pile-wrapper {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        
+        .emoji-pile {
+            position: absolute;
+            bottom: 0;
+            left: 50%; /* Center horizontally */
+            width: 100%;
+            height: 100%;
+            transform: translate(-60%, 150%);
+            transition: transform 1s ease-out;
+        }
+        .emoji-item {
+            position: absolute;
+            font-size: 3rem;
+            line-height: 1;
+        }
+        
+        #calorieCountBox {
+            position: absolute;
+            z-index: 20;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 1rem;
+            border-radius: 1rem;
+            background-color: rgba(31, 41, 55, 0.8);
+            backdrop-filter: blur(8px);
+        }
+    </style>
+</head>
+<body class="bg-black text-white min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- The Goth Girl-inspired bouncing shape. Don't ask, just appreciate. -->
+    <div class="absolute w-72 h-72 md:w-96 md:h-96 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-0 opacity-20"
+        style="
+            background: radial-gradient(circle, rgba(169, 169, 169, 0.2) 0%, rgba(255, 255, 255, 0.05) 70%, transparent 100%);
+            border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+            animation: bounce 6s ease-in-out infinite;
+            filter: blur(50px);
+        ">
+    </div>
+
+    <div id="container" class="relative z-10 w-full max-w-lg bg-gray-900 rounded-3xl container-shadow p-6 sm:p-8 space-y-6">
+
+        <h1 id="appTitle" class="text-fuchsia-600 text-center text-4xl sm:text-5xl font-extrabold container-shadow py-2 px-4 rounded-xl">
+            Big Back Logger
+        </h1>
+
+        <!-- Custom Calendar UI -->
+        <div class="relative flex items-center justify-between p-2 bg-gray-800 rounded-xl container-shadow mb-4">
+            <button id="prevDayBtn" class="bouncy px-4 py-2 rounded-lg text-fuchsia-600 hover:bg-gray-700">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <div id="dateDisplay" class="text-white text-lg font-bold cursor-pointer bouncy p-2 rounded-md hover:bg-gray-700">
+                Loading...
+            </div>
+            <button id="nextDayBtn" class="bouncy px-4 py-2 rounded-lg text-fuchsia-600 hover:bg-gray-700">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+            <div id="calendar-popup" class="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-gray-800 p-4 rounded-xl container-shadow w-64 md:w-80 hidden z-50">
+                <div class="flex justify-between items-center mb-4">
+                    <button id="prevMonthBtn" class="bouncy px-2 py-1 rounded-lg text-white hover:bg-gray-700"><i class="fas fa-chevron-left"></i></button>
+                    <span id="month-year" class="text-white font-bold text-lg"></span>
+                    <button id="nextMonthBtn" class="bouncy px-2 py-1 rounded-lg text-white hover:bg-gray-700"><i class="fas fa-chevron-right"></i></button>
+                </div>
+                <div class="calendar-grid text-sm text-gray-400 font-semibold mb-2">
+                    <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+                </div>
+                <div id="calendar-days" class="calendar-grid text-white font-medium"></div>
+            </div>
+        </div>
+
+        <div id="totalCaloriesContainer" class="relative flex flex-col sm:flex-row items-center justify-between p-4 bg-gray-800 rounded-2xl container-shadow h-48 sm:h-auto">
+            <div class="relative z-10 text-xl sm:text-2xl font-bold text-gray-300">Total Calories:</div>
+            
+            <div class="relative z-10 font-extrabold text-fuchsia-600 container-shadow bg-gray-700 rounded-xl mt-2 sm:mt-0 w-full h-48 overflow-hidden">
+                <div id="calorieCountBox" class="bg-gray-900 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 px-4 py-2 rounded-xl">
+                    <span id="calorieCountText" class="text-3xl font-extrabold text-white">0</span>
+                </div>
+
+                <div class="emoji-pile-wrapper">
+                    <div id="emojiPile" class="emoji-pile"></div>
+                </div>
+            </div>
+        </div>
+
+        <p class="text-sm text-gray-500 text-center">User ID: <span id="userIdDisplay">Local Storage</span></p>
+
+        <div class="space-y-4">
+            <div class="text-center text-gray-400 font-bold tracking-wide uppercase">Add Calories</div>
+            <input type="number" id="calorieInput" placeholder="Enter calories..."
+                   class="w-full p-4 text-center rounded-xl bg-gray-800 text-white placeholder-gray-500 text-2xl font-bold focus:outline-none focus:ring-4 focus:ring-fuchsia-600 transition-all duration-300">
+            <button id="addCalorieBtn" class="w-full py-4 rounded-xl bg-fuchsia-600 text-gray-900 text-xl font-bold uppercase tracking-wider
+                   transform transition-all duration-200 bouncy animate-pulse-fuchsia">
+                Add to the Void
+            </button>
+        </div>
+
+        <div id="logContainer" class="p-4 bg-gray-800 rounded-2xl h-64 overflow-y-auto space-y-2 container-shadow">
+            <p class="text-gray-500 text-center text-sm" id="logPlaceholder">Your dark secrets will be logged here...</p>
+        </div>
+
+    </div>
+
+    <!-- The custom pop-up message box -->
+    <div id="messageBox" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gray-800 text-white p-6 rounded-2xl z-50 transform scale-0 transition-transform duration-300 container-shadow">
+        <div id="messageText" class="text-center text-lg font-semibold mb-4"></div>
+        <button id="closeMessageBtn" class="w-full py-2 rounded-xl bg-fuchsia-600 text-gray-900 font-bold transform transition-all duration-200 bouncy">
+            Okay
+        </button>
+    </div>
+
+    <script type="text/javascript">
+        // PWA: Service Worker script as a blob URL
+        if ('serviceWorker' in navigator) {
+            const swCode = `
+                const CACHE_NAME = 'big-back-logger-cache-v1';
+                const urlsToCache = [
+                    './',
+                    './index.html'
+                ];
+
+                self.addEventListener('install', (event) => {
+                    event.waitUntil(
+                        caches.open(CACHE_NAME)
+                        .then((cache) => {
+                            return cache.addAll(urlsToCache);
+                        })
+                    );
+                });
+
+                self.addEventListener('fetch', (event) => {
+                    event.respondWith(
+                        caches.match(event.request)
+                        .then((response) => {
+                            if (response) {
+                                return response;
+                            }
+                            return fetch(event.request);
+                        })
+                    );
+                });
+            `;
+            const blob = new Blob([swCode], { type: 'application/javascript' });
+            const swUrl = URL.createObjectURL(blob);
+            navigator.serviceWorker.register(swUrl)
+                .then(function(registration) {
+                    console.log('Service Worker registration successful with scope: ', registration.scope);
+                })
+                .catch(function(err) {
+                    console.log('Service Worker registration failed: ', err);
+                });
+        }
+    </script>
+    <script type="text/javascript">
+        // Get a reference to the main elements
+        const calorieInput = document.getElementById('calorieInput');
+        const addCalorieBtn = document.getElementById('addCalorieBtn');
+        const logContainer = document.getElementById('logContainer');
+        const logPlaceholder = document.getElementById('logPlaceholder');
+        const dateDisplay = document.getElementById('dateDisplay');
+        const prevDayBtn = document.getElementById('prevDayBtn');
+        const nextDayBtn = document.getElementById('nextDayBtn');
+        const calendarPopup = document.getElementById('calendar-popup');
+        const prevMonthBtn = document.getElementById('prevMonthBtn');
+        const nextMonthBtn = document.getElementById('nextMonthBtn');
+        const emojiPileContainer = document.getElementById('emojiPile');
+
+        // Global variables for the app state
+        let currentDate = new Date();
+        let currentMonth = currentDate.getMonth();
+        let currentYear = currentDate.getFullYear();
+        
+        const foodEmojis = ['🍔', '🍕', '🌮', '🍩', '🍣', '🍎', '🍇', '🌭', '🍟', '🥞', '🥓', '🍗', '🍜', '🍦', '🍪', '🧇', '🥨', '🥐', '🌶️', '🥩', '🥖', '🥪', '🫔', '🧆', '🌯'];
+        const MAX_CALORIES = 2500;
+        const CALC_MAX_CALORIES = 3000;
+        const MAX_EMOJIS = 100;
+        
+        // Message box functions
+        const messageBox = document.getElementById('messageBox');
+        const messageText = document.getElementById('messageText');
+        const closeMessageBtn = document.getElementById('closeMessageBtn');
+
+        function showMessage(message) {
+            messageText.textContent = message;
+            messageBox.classList.add('scale-100');
+            messageBox.classList.remove('scale-0');
+        }
+
+        closeMessageBtn.addEventListener('click', () => {
+            messageBox.classList.add('scale-0');
+            messageBox.classList.remove('scale-100');
+        });
+        
+        // Emoji pile logic
+        function generateEmojiPile() {
+            for (let i = 0; i < MAX_EMOJIS; i++) {
+                const emoji = foodEmojis[Math.floor(Math.random() * foodEmojis.length)];
+                const emojiDiv = document.createElement('div');
+                emojiDiv.className = 'emoji-item';
+                emojiDiv.textContent = emoji;
+
+                const randomX = Math.random() * 100;
+                const randomY = Math.random() * 100;
+                const randomRotation = (Math.random() * 40) - 20;
+                const randomScale = (Math.random() * 0.8) + 1.0;
+                const randomZIndex = Math.floor(Math.random() * 100);
+
+                emojiDiv.style.left = `${randomX}%`;
+                emojiDiv.style.bottom = `${randomY}%`;
+                emojiDiv.style.transform = `rotate(${randomRotation}deg) scale(${randomScale})`;
+                emojiDiv.style.zIndex = randomZIndex;
+
+                emojiPileContainer.appendChild(emojiDiv);
+            }
+        }
+        
+        function updateEmojiPile(totalCalories) {
+            let fillPercentage = Math.min(totalCalories / CALC_MAX_CALORIES, 1);
+            const translateYValue = (1 - fillPercentage) * 150;
+            emojiPileContainer.style.transform = `translate(-60%, ${translateYValue}%)`;
+        }
+
+        // Color change logic
+        function checkTotalCalories(total) {
+            const appTitle = document.getElementById('appTitle');
+            const totalCaloriesContainer = document.getElementById('totalCaloriesContainer');
+            const calorieInput = document.getElementById('calorieInput');
+            const addCalorieBtn = document.getElementById('addCalorieBtn');
+            const closeMessageBtn = document.getElementById('closeMessageBtn');
+
+            if (total > MAX_CALORIES) {
+                appTitle.classList.remove('text-fuchsia-600');
+                appTitle.classList.add('text-red-400');
+                totalCaloriesContainer.classList.remove('text-fuchsia-600', 'bg-gray-800');
+                totalCaloriesContainer.classList.add('text-red-400', 'bg-red-900', 'animate-pulse-red', 'shake-animation');
+                calorieInput.classList.remove('focus:ring-fuchsia-600');
+                calorieInput.classList.add('focus:ring-red-400');
+                addCalorieBtn.classList.remove('bg-fuchsia-600', 'animate-pulse-fuchsia');
+                addCalorieBtn.classList.add('bg-red-400', 'animate-pulse-red');
+                closeMessageBtn.classList.remove('bg-fuchsia-600');
+                closeMessageBtn.classList.add('bg-red-400');
+            } else {
+                appTitle.classList.remove('text-red-400');
+                appTitle.classList.add('text-fuchsia-600');
+                totalCaloriesContainer.classList.remove('text-red-400', 'bg-red-900', 'animate-pulse-red', 'shake-animation');
+                totalCaloriesContainer.classList.add('text-fuchsia-600', 'bg-gray-800');
+                calorieInput.classList.remove('focus:ring-red-400');
+                calorieInput.classList.add('focus:ring-fuchsia-600');
+                addCalorieBtn.classList.remove('bg-red-400', 'animate-pulse-red');
+                addCalorieBtn.classList.add('bg-fuchsia-600', 'animate-pulse-fuchsia');
+                closeMessageBtn.classList.remove('bg-red-400');
+                closeMessageBtn.classList.add('bg-fuchsia-600');
+            }
+        }
+
+        // Date formatting and localStorage functions
+        function formatDate(date) {
+            const yyyy = date.getFullYear();
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const dd = String(date.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+        
+        function getDailyLogs() {
+            const logs = localStorage.getItem('dailyLogs');
+            return logs ? JSON.parse(logs) : {};
+        }
+
+        function saveDailyLogs(logs) {
+            localStorage.setItem('dailyLogs', JSON.stringify(logs));
+        }
+
+        // Main app logic and event listeners
+        function renderLog(log) {
+            logContainer.innerHTML = '';
+            if (log.length === 0) {
+                logContainer.appendChild(logPlaceholder);
+                logPlaceholder.classList.remove('hidden');
+                return;
+            }
+            logPlaceholder.classList.add('hidden');
+
+            const sortedLog = log.slice().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            sortedLog.forEach((entry) => {
+                const entryDiv = document.createElement('div');
+                entryDiv.className = 'flex items-center justify-between p-3 bg-gray-900 rounded-xl container-shadow transition-transform hover:translate-x-1';
+                entryDiv.dataset.id = entry.id;
+
+                const time = new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                entryDiv.innerHTML = `
+                    <div class="flex-grow">
+                        <span class="text-lg font-semibold text-white">${entry.calories} kcal</span>
+                        <span class="text-sm text-gray-400">(${time})</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button class="edit-btn bouncy text-gray-400 hover:text-fuchsia-600 text-lg">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="delete-btn bouncy text-gray-400 hover:text-red-400 text-lg">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                `;
+                logContainer.appendChild(entryDiv);
+
+                const deleteBtn = entryDiv.querySelector('.delete-btn');
+                deleteBtn.addEventListener('click', () => {
+                    const dateString = formatDate(currentDate);
+                    const allLogs = getDailyLogs();
+                    const dailyData = allLogs[dateString];
+                    if (!dailyData) return;
+
+                    const entryId = entryDiv.dataset.id;
+                    const indexToDelete = dailyData.log.findIndex(item => item.id == entryId);
+
+                    if (indexToDelete !== -1) {
+                        const deletedEntry = dailyData.log.splice(indexToDelete, 1)[0];
+                        dailyData.totalCalories -= deletedEntry.calories;
+                        saveDailyLogs(allLogs);
+                        renderLogForDate();
+                        renderCalendar();
+                    }
+                });
+
+                const editBtn = entryDiv.querySelector('.edit-btn');
+                editBtn.addEventListener('click', () => {
+                    const originalValue = entry.calories;
+                    const originalText = entryDiv.querySelector('.flex-grow');
+                    const actions = entryDiv.querySelector('.flex-grow + div');
+
+                    originalText.innerHTML = `
+                        <input type="number" value="${originalValue}" class="w-24 p-1 rounded-md bg-gray-700 text-white text-center focus:outline-none focus:ring-2 focus:ring-fuchsia-600">
+                    `;
+
+                    actions.innerHTML = `
+                        <button class="save-btn bouncy text-fuchsia-600 hover:text-fuchsia-500 text-lg">
+                            <i class="fas fa-check"></i>
+                        </button>
+                        <button class="cancel-btn bouncy text-red-400 hover:text-red-500 text-lg">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+
+                    const saveBtn = actions.querySelector('.save-btn');
+                    const cancelBtn = actions.querySelector('.cancel-btn');
+                    const editInput = originalText.querySelector('input');
+
+                    editInput.focus();
+
+                    saveBtn.addEventListener('click', () => {
+                        const newCalories = parseInt(editInput.value, 10);
+                        if (isNaN(newCalories) || newCalories < 0) {
+                            showMessage("Invalid value. You can't cheat the void.");
+                            return;
+                        }
+                        const dateString = formatDate(currentDate);
+                        const allLogs = getDailyLogs();
+                        const dailyData = allLogs[dateString];
+                        if (!dailyData) return;
+                        
+                        const entryId = entryDiv.dataset.id;
+                        const indexToUpdate = dailyData.log.findIndex(item => item.id == entryId);
+                        
+                        if (indexToUpdate !== -1) {
+                            const oldCalories = dailyData.log[indexToUpdate].calories;
+                            dailyData.log[indexToUpdate].calories = newCalories;
+                            dailyData.totalCalories -= oldCalories;
+                            dailyData.totalCalories += newCalories;
+                            saveDailyLogs(allLogs);
+                            renderLogForDate();
+                            renderCalendar();
+                        }
+                    });
+
+                    cancelBtn.addEventListener('click', () => {
+                        renderLogForDate();
+                    });
+                });
+            });
+        }
+        
+        function renderLogForDate() {
+            const dateString = formatDate(currentDate);
+            const allLogs = getDailyLogs();
+            const dailyData = allLogs[dateString] || { totalCalories: 0, log: [] };
+            const total = dailyData.totalCalories;
+            const log = dailyData.log;
+
+            document.getElementById('calorieCountText').textContent = total;
+            checkTotalCalories(total);
+            renderLog(log);
+            updateEmojiPile(total);
+        }
+
+        async function renderCalendar() {
+            const monthYearDisplay = document.getElementById('month-year');
+            const calendarDays = document.getElementById('calendar-days');
+            const allLogs = getDailyLogs();
+            const loggedDates = Object.keys(allLogs).reduce((acc, date) => {
+                if (allLogs[date].totalCalories > 0) {
+                    acc[date] = allLogs[date].totalCalories;
+                }
+                return acc;
+            }, {});
+
+            monthYearDisplay.textContent = `${new Date(currentYear, currentMonth).toLocaleString('default', { month: 'long' })} ${currentYear}`;
+            calendarDays.innerHTML = '';
+
+            const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
+            const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0);
+            const firstDayIndex = firstDayOfMonth.getDay();
+
+            for (let i = 0; i < firstDayIndex; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.className = 'day-cell';
+                calendarDays.appendChild(emptyCell);
+            }
+
+            for (let day = 1; day <= lastDayOfMonth.getDate(); day++) {
+                const dayCell = document.createElement('div');
+                dayCell.className = 'day-cell';
+                const dateString = formatDate(new Date(currentYear, currentMonth, day));
+
+                dayCell.textContent = day;
+                dayCell.dataset.date = dateString;
+
+                if (loggedDates[dateString]) {
+                    const marker = document.createElement('div');
+                    marker.className = 'marker';
+                    if (loggedDates[dateString] > MAX_CALORIES) {
+                        marker.classList.add('red');
+                    } else {
+                        marker.classList.add('purple');
+                    }
+                    dayCell.appendChild(marker);
+                }
+
+                if (currentDate.getDate() === day && currentDate.getMonth() === currentMonth && currentDate.getFullYear() === currentYear) {
+                    dayCell.classList.add('selected');
+                }
+
+                dayCell.addEventListener('click', (e) => {
+                    const selectedDate = new Date(e.currentTarget.dataset.date);
+                    currentDate = selectedDate;
+                    dateDisplay.textContent = currentDate.toLocaleDateString();
+                    renderLogForDate();
+                    calendarPopup.classList.add('hidden');
+                });
+
+                calendarDays.appendChild(dayCell);
+            }
+        }
+
+        function initApp() {
+            dateDisplay.textContent = currentDate.toLocaleDateString();
+            renderLogForDate();
+            renderCalendar();
+
+            dateDisplay.addEventListener('click', () => {
+                calendarPopup.classList.toggle('hidden');
+                renderCalendar();
+            });
+
+            prevMonthBtn.addEventListener('click', () => {
+                currentMonth--;
+                if (currentMonth < 0) {
+                    currentMonth = 11;
+                    currentYear--;
+                }
+                renderCalendar();
+            });
+
+            nextMonthBtn.addEventListener('click', () => {
+                currentMonth++;
+                if (currentMonth > 11) {
+                    currentMonth = 0;
+                    currentYear++;
+                }
+                renderCalendar();
+            });
+
+            prevDayBtn.addEventListener('click', () => {
+                currentDate.setDate(currentDate.getDate() - 1);
+                dateDisplay.textContent = currentDate.toLocaleDateString();
+                currentMonth = currentDate.getMonth();
+                currentYear = currentDate.getFullYear();
+                renderLogForDate();
+                renderCalendar();
+            });
+
+            nextDayBtn.addEventListener('click', () => {
+                currentDate.setDate(currentDate.getDate() + 1);
+                dateDisplay.textContent = currentDate.toLocaleDateString();
+                currentMonth = currentDate.getMonth();
+                currentYear = currentDate.getFullYear();
+                renderLogForDate();
+                renderCalendar();
+            });
+
+            addCalorieBtn.addEventListener('click', () => {
+                const calories = parseInt(calorieInput.value, 10);
+                if (isNaN(calories) || calories <= 0) {
+                    showMessage("You gotta add a valid number, you dummy.");
+                    return;
+                }
+
+                addCalorieBtn.disabled = true;
+                addCalorieBtn.textContent = 'Logging...';
+
+                const dateString = formatDate(currentDate);
+                const allLogs = getDailyLogs();
+                const dailyData = allLogs[dateString] || { totalCalories: 0, log: [] };
+                
+                const newLogEntry = {
+                    id: Date.now(),
+                    calories,
+                    timestamp: new Date().toISOString()
+                };
+                dailyData.log.push(newLogEntry);
+                dailyData.totalCalories += calories;
+                
+                allLogs[dateString] = dailyData;
+                saveDailyLogs(allLogs);
+                
+                calorieInput.value = '';
+                addCalorieBtn.disabled = false;
+                addCalorieBtn.textContent = 'Add to the Void';
+                
+                renderLogForDate();
+                renderCalendar();
+            });
+        }
+        
+        window.onload = function() {
+            generateEmojiPile();
+            initApp();
+        };
+
+    </script>
+</body>
+</html>
+
